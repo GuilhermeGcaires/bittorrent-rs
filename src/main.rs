@@ -3,6 +3,13 @@ use std::env;
 
 #[allow(dead_code)]
 fn decode_bencoded_value(encoded_value: &str) -> serde_json::Value {
+    if let Some(rest) = encoded_value.strip_prefix('i') {
+        if let Some((nums, _)) = rest.split_once('e') {
+            if let Ok(n) = nums.parse::<i64>() {
+                return serde_json::Value::Number(n.into());
+            }
+        }
+    }
     if let Some((len, content)) = encoded_value.split_once(':') {
         if let Ok(len) = len.parse::<usize>() {
             return serde_json::Value::String(content[..len].to_string());
