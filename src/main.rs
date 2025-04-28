@@ -1,5 +1,21 @@
+use anyhow::Context;
+use clap::{Parser, Subcommand};
+use codecrafters_bittorrent::torrent::Torrent;
 use serde_json;
-use std::env;
+use std::{env, path::PathBuf};
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand, Debug)]
+enum Command {
+    Decode { value: String },
+    Info { torrent: PathBuf },
+}
 
 #[allow(dead_code)]
 fn decode_bencoded_value(encoded_value: &str) -> (serde_json::Value, &str) {
@@ -58,17 +74,22 @@ fn decode_bencoded_value(encoded_value: &str) -> (serde_json::Value, &str) {
     panic!("Unhandled encoded value: {}", encoded_value)
 }
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    let command = &args[1];
+fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
 
-    if command == "decode" {
-        eprintln!("Logs from your program will appear here!");
+    match args.command {
+        Command::Decode { value } => {
+            let v = decode_bencoded_value(&value);
+        }
 
-        let encoded_value = &args[2];
-        let decoded_value = decode_bencoded_value(encoded_value);
-        println!("{}", decoded_value.0.to_string());
-    } else {
-        println!("unknown command: {}", args[1])
+        Command::Info { torrent } => {
+            let torrent_file = std::fs::read(torrent).context("Couldn't read torrent file")?;
+            let torrent: Torrent =
+                serde_bencode::from_bytes(&torrent_file).expect("Parse torrent file");
+            println!("Tracker URL: {}", torrent.announce);
+            println!("Length: {}", torrent.info.length);
+        }
     }
+
+    Ok(())
 }
