@@ -2,20 +2,60 @@ use serde_json;
 use std::env;
 
 #[allow(dead_code)]
-fn decode_bencoded_value(encoded_value: &str) -> serde_json::Value {
-    if let Some(rest) = encoded_value.strip_prefix('i') {
-        if let Some((nums, _)) = rest.split_once('e') {
-            if let Ok(n) = nums.parse::<i64>() {
-                return serde_json::Value::Number(n.into());
+fn decode_bencoded_value(encoded_value: &str) -> (serde_json::Value, &str) {
+    match encoded_value.chars().next() {
+        Some('i') => {
+            if let Some((n, rest)) =
+                encoded_value
+                    .split_at(1)
+                    .1
+                    .split_once('e')
+                    .and_then(|(digits, rest)| {
+                        let n = digits.parse::<i64>().ok()?;
+                        Some((n, rest))
+                    })
+            {
+                return (n.into(), rest);
             }
         }
-    }
-    if let Some((len, content)) = encoded_value.split_once(':') {
-        if let Ok(len) = len.parse::<usize>() {
-            return serde_json::Value::String(content[..len].to_string());
+        Some('l') => {
+            let mut values = Vec::new();
+            let mut rest = encoded_value.split_at(1).1;
+            while !rest.is_empty() && !rest.starts_with('e') {
+                let (v, remainder) = decode_bencoded_value(rest);
+                values.push(v);
+                rest = remainder;
+            }
+            return (values.into(), &rest[1..]);
         }
+        Some('d') => {
+            let mut dict = serde_json::Map::new();
+            let mut rest = encoded_value.split_at(1).1;
+            while !rest.is_empty() && !rest.starts_with('e') {
+                let (k, remainder) = decode_bencoded_value(rest);
+                let k = match k {
+                    serde_json::Value::String(k) => k,
+                    k => {
+                        panic!("dict keys must be strings, not {k:?}");
+                    }
+                };
+                let (v, remainder) = decode_bencoded_value(remainder);
+                dict.insert(k, v);
+                rest = remainder;
+            }
+            return (dict.into(), &rest[1..]);
+        }
+        Some('0'..='9') => {
+            if let Some((len, rest)) = encoded_value.split_once(':') {
+                if let Ok(len) = len.parse::<usize>() {
+                    return (rest[..len].to_string().into(), &rest[len..]);
+                }
+            }
+        }
+        _ => {}
     }
-    panic!("Unhandled encoded value: {}", encoded_value);
+
+    panic!("Unhandled encoded value: {}", encoded_value)
 }
 
 fn main() {
@@ -27,7 +67,7 @@ fn main() {
 
         let encoded_value = &args[2];
         let decoded_value = decode_bencoded_value(encoded_value);
-        println!("{}", decoded_value.to_string());
+        println!("{}", decoded_value.0.to_string());
     } else {
         println!("unknown command: {}", args[1])
     }
