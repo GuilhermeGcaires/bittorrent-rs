@@ -79,7 +79,8 @@ fn main() -> anyhow::Result<()> {
 
     match args.command {
         Command::Decode { value } => {
-            let v = decode_bencoded_value(&value);
+            let decoded_value = decode_bencoded_value(&value).1;
+            println!("{}", decoded_value);
         }
 
         Command::Info { torrent } => {
