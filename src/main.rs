@@ -79,7 +79,7 @@ fn main() -> anyhow::Result<()> {
 
     match args.command {
         Command::Decode { value } => {
-            let decoded_value = decode_bencoded_value(&value).1;
+            let decoded_value = decode_bencoded_value(&value).0;
             println!("{}", decoded_value);
         }
 
