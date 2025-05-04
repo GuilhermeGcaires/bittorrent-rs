@@ -2,6 +2,7 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use codecrafters_bittorrent::torrent::Torrent;
 use serde_json;
+use sha1::{Digest, Sha1};
 use std::{env, path::PathBuf};
 
 #[derive(Parser, Debug)]
@@ -89,6 +90,9 @@ fn main() -> anyhow::Result<()> {
                 serde_bencode::from_bytes(&torrent_file).expect("Parse torrent file");
             println!("Tracker URL: {}", torrent.announce);
             println!("Length: {}", torrent.info.length);
+
+            let info_hash = torrent.info_hash();
+            println!("Info Hash: {}", hex::encode(&info_hash));
         }
     }
 
