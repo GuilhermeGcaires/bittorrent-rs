@@ -13,7 +13,7 @@ pub struct Info {
     pub length: usize,
     name: String,
     #[serde(rename = "piece length")]
-    piece_length: usize,
+    pub piece_length: usize,
     pub pieces: ByteBuf,
 }
 
@@ -24,5 +24,14 @@ impl Torrent {
         let mut hasher = Sha1::new();
         hasher.update(&info_encoded);
         hasher.finalize().try_into().expect("Error on hasher array")
+    }
+
+    pub fn pieces_hash(&self) -> Vec<String> {
+        let mut hashes = Vec::new();
+        let pieces = &self.info.pieces;
+        for piece in pieces.chunks(20) {
+            hashes.push(hex::encode(piece));
+        }
+        hashes
     }
 }

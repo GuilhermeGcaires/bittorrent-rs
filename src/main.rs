@@ -93,6 +93,14 @@ fn main() -> anyhow::Result<()> {
 
             let info_hash = torrent.info_hash();
             println!("Info Hash: {}", hex::encode(&info_hash));
+
+            println!("Piece Length: {}", torrent.info.piece_length);
+
+            let pieces_hash = torrent.pieces_hash();
+            println!("Piece Hashes: ");
+            for piece in pieces_hash {
+                println!("{}", piece);
+            }
         }
     }
 
