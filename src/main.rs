@@ -1,8 +1,11 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use codecrafters_bittorrent::torrent::Torrent;
+use codecrafters_bittorrent::{
+    peers::Peers,
+    torrent::Torrent,
+    tracker::{TrackerRequest, TrackerResponse},
+};
 use serde_json;
-use sha1::{Digest, Sha1};
 use std::{env, path::PathBuf};
 
 #[derive(Parser, Debug)]
@@ -16,6 +19,7 @@ struct Args {
 enum Command {
     Decode { value: String },
     Info { torrent: PathBuf },
+    Peers { torrent: PathBuf },
 }
 
 #[allow(dead_code)]
@@ -75,7 +79,8 @@ fn decode_bencoded_value(encoded_value: &str) -> (serde_json::Value, &str) {
     panic!("Unhandled encoded value: {}", encoded_value)
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     match args.command {
@@ -102,7 +107,48 @@ fn main() -> anyhow::Result<()> {
                 println!("{}", piece);
             }
         }
+        Command::Peers { torrent } => {
+            let torrent_file = std::fs::read(torrent).context("Couldn't read torrent file")?;
+            let torrent: Torrent =
+                serde_bencode::from_bytes(&torrent_file).expect("Parse torrent file");
+
+            let info_hash = torrent.info_hash();
+            let request = TrackerRequest {
+                peer_id: String::from("00112233445566778899"),
+                port: 6881,
+                uploaded: 0,
+                downloaded: 0,
+                left: torrent.info.length,
+                compact: 1,
+            };
+            let url_params =
+                serde_urlencoded::to_string(&request).context("url-encode tracker parameters")?;
+            let tracker_url = format!(
+                "{}?{}&info_hash={}",
+                torrent.announce,
+                url_params,
+                &urlencode(&info_hash)
+            );
+            let response = reqwest::get(tracker_url).await.context("query tracker")?;
+            let response = response.bytes().await.context("tracker response")?;
+            let tracker_info: TrackerResponse =
+                serde_bencode::from_bytes(&response).context("parse tracker response")?;
+            let peers = Peers::try_from(tracker_info.peers.as_ref())?;
+            for peer in peers.0 {
+                println!("{}", peer);
+            }
+        }
     }
 
     Ok(())
+}
+
+// Manual encoding for url
+fn urlencode(t: &[u8; 20]) -> String {
+    let mut encoded = String::with_capacity(3 * t.len());
+    for &byte in t {
+        encoded.push('%');
+        encoded.push_str(&hex::encode(&[byte]));
+    }
+    encoded
 }
