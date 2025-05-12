@@ -37,3 +37,35 @@ impl fmt::Display for Peer {
         write!(f, "{}:{}", self.ip, self.port)
     }
 }
+
+pub struct Handshake {
+    length: u8,
+    magic_string: [u8; 19],
+    reserved_bytes: [u8; 8],
+    info_hash: [u8; 20],
+    pub peer_id: [u8; 20],
+}
+
+impl Handshake {
+    pub fn new(info_hash: [u8; 20], peer_id: [u8; 20]) -> Self {
+        Self {
+            length: 19,
+            magic_string: *b"BitTorrent protocol",
+            reserved_bytes: [0; 8],
+            info_hash,
+            peer_id,
+        }
+    }
+
+    pub fn encode(&self) -> [u8; 68] {
+        let mut buffer = [0u8; 68];
+
+        buffer[0] = self.length;
+        buffer[1..20].copy_from_slice(&self.magic_string);
+        buffer[20..28].copy_from_slice(&self.reserved_bytes);
+        buffer[28..48].copy_from_slice(&self.info_hash);
+        buffer[48..68].copy_from_slice(&self.peer_id);
+
+        buffer
+    }
+}

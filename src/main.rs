@@ -1,12 +1,13 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use codecrafters_bittorrent::{
-    peers::Peers,
+    peers::{Handshake, Peers},
     torrent::Torrent,
     tracker::{TrackerRequest, TrackerResponse},
 };
 use serde_json;
-use std::{env, path::PathBuf};
+use std::{env, net::SocketAddrV4, path::PathBuf};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -20,6 +21,7 @@ enum Command {
     Decode { value: String },
     Info { torrent: PathBuf },
     Peers { torrent: PathBuf },
+    Handshake { torrent: PathBuf, peer: String },
 }
 
 #[allow(dead_code)]
@@ -137,6 +139,28 @@ async fn main() -> anyhow::Result<()> {
             for peer in peers.0 {
                 println!("{}", peer);
             }
+        }
+        Command::Handshake { torrent, peer } => {
+            let torrent_file = std::fs::read(torrent).context("Couldn't read torrent file")?;
+            let torrent: Torrent =
+                serde_bencode::from_bytes(&torrent_file).expect("Parse torrent file");
+
+            let info_hash = torrent.info_hash();
+            let peer = peer.parse::<SocketAddrV4>().context("peer parse")?;
+            let mut peer_connection = tokio::net::TcpStream::connect(peer)
+                .await
+                .context("handshake peer connection")?;
+            let handshake = Handshake::new(info_hash, *b"00112233445566778899");
+            let handshake_bytes = handshake.encode();
+            println!("{:?}", handshake_bytes);
+
+            peer_connection.write_all(&handshake_bytes).await?;
+
+            let mut response = [0u8; 1024];
+            peer_connection.read(&mut response).await?;
+
+            let peer_id = &response[48..68];
+            println!("Peer ID: {}", hex::encode(peer_id));
         }
     }
 
